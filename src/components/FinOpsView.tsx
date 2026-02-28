@@ -386,7 +386,12 @@ export function FinOpsView() {
 
       // If assistant returned data, resolve any matching absence memories
       if (foundMatch && (period || resource)) {
-        resolveMemories((m) => !m.resolved && ((period && m.period === period) || (resource && m.resource && m.resource.toLowerCase() === resource.toLowerCase())));
+        resolveMemories((m) =>
+          !m.resolved && (
+            (period ? m.period === period : false) ||
+            (resource ? (m.resource ? m.resource.toLowerCase() === resource.toLowerCase() : false) : false)
+          )
+        );
       }
     } catch (err) {
       const assistantMessage: ChatMessage = {
