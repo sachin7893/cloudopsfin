@@ -6,14 +6,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  Legend,
 } from 'recharts';
 import { ChartContainer } from '@/components/ui/chart';
 import { ChatMessage } from '@/types';
@@ -22,9 +19,9 @@ import { Send, DollarSign } from 'lucide-react';
 export function FinOpsView() {
   // only keep the finops (yearly trend) data for now
   const [finopsData, setFinopsData] = useState<{ month: string; total_cost: number }[]>([]);
-  // API may return top increases with two months and difference
+  // API may return top resources list: { resourceid, productname, total_cost }
   const [apiTopIncreases, setApiTopIncreases] = useState<
-    { service_name: string; nov_2025_cost: number; dec_2025_cost: number; cost_difference: number }[]
+    { resourceid: string; productname: string; total_cost: number }[]
   >([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -49,13 +46,6 @@ export function FinOpsView() {
   };
 
   const [memories, setMemories] = useState<MemoryItem[]>([]);
-
-  // interactive follow-up state: when the user prompt is missing info (e.g. year or resource)
-  type Followup =
-    | { kind: 'ask_period'; resource: string; originalPrompt: string }
-    | { kind: 'ask_resource'; originalPrompt: string }
-    | null;
-  const [pendingFollowup, setPendingFollowup] = useState<Followup>(null);
 
   // Production memory strategy: prefer system (server-side) memory with localStorage fallback
   // The API exposes only `/chat`. Use `/chat` with actions to manage memories on the server.
@@ -255,15 +245,15 @@ export function FinOpsView() {
         }
 
         if (topIncRes && topIncRes.ok) {
-          const inc = (await topIncRes.json()) as { service_name?: string; nov_2025_cost?: number; dec_2025_cost?: number; cost_difference?: number }[];
-          // normalize into expected shape
+          const inc = (await topIncRes.json()) as { resourceid?: string; productname?: string; total_cost?: number }[];
+          // normalize and keep only entries with a total_cost
           const list = (Array.isArray(inc) ? inc : [])
             .map((r) => ({
-              service_name: String(r.service_name ?? ''),
-              nov_2025_cost: Number(r.nov_2025_cost ?? 0),
-              dec_2025_cost: Number(r.dec_2025_cost ?? 0),
-              cost_difference: Number(r.cost_difference ?? (Number(r.dec_2025_cost ?? 0) - Number(r.nov_2025_cost ?? 0))),
-            }));
+              resourceid: String(r.resourceid ?? r.productname ?? ''),
+              productname: String(r.productname ?? r.resourceid ?? ''),
+              total_cost: Number(r.total_cost ?? 0),
+            }))
+            .filter((r) => !isNaN(r.total_cost));
           setApiTopIncreases(list);
           console.debug('top-increase data', list);
         } else {
@@ -307,136 +297,6 @@ export function FinOpsView() {
     console.debug('memories (all)', memories);
     console.debug('relevantMemories (for prompt)', relevantMemories);
 
-    // Interactive follow-up: if we're waiting for a follow-up answer (resource or period),
-    // treat this user message as the follow-up answer and combine with original prompt.
-    if (pendingFollowup) {
-      const answerText = prompt; // user's most recent message
-      let combinedPrompt = pendingFollowup.originalPrompt;
-      if (pendingFollowup.kind === 'ask_period') {
-        combinedPrompt = `${pendingFollowup.originalPrompt} ${answerText}`.trim();
-      } else if (pendingFollowup.kind === 'ask_resource') {
-        combinedPrompt = `${pendingFollowup.originalPrompt} ${answerText}`.trim();
-      }
-      // clear followup and proceed to send combinedPrompt
-      setPendingFollowup(null);
-
-      const relevantMemoriesAfter = findMemoriesForPrompt(combinedPrompt);
-      try {
-        const res = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: combinedPrompt, previousPrompt: prevUserPrompt ?? '', memories: relevantMemoriesAfter }),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          const assistantMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: `Chat API error: ${res.status} ${res.statusText} ${text}`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-          return;
-        }
-
-        let parsed: any = null;
-        const body = await res.json();
-          const answer = body.answer ?? '';
-          const match = answer.match(/\\{[\\s\\S]*\\}/);
-          if (match) {
-              // convert single quotes to double quotes and parse
-              const jsonText = match[0].replace(/'/g, '"');
-              try {
-                  parsed = JSON.parse(jsonText);
-                  // coerce numeric-like strings into numbers
-                  const coerceNumbers = (v: any): any => {
-                      if (v === null || v === undefined) return v;
-                      if (typeof v === 'string' && /^-?\d+(?:\.\d+)?$/.test(v)) return Number(v);
-                      if (Array.isArray(v)) return v.map(coerceNumbers);
-                      if (typeof v === 'object') {
-                          const out: any = {};
-                          Object.entries(v).forEach(([k, val]) => { out[k] = coerceNumbers(val); });
-                          return out;
-                      }
-                      return v;
-                  };
-                  parsed = coerceNumbers(parsed);
-                  console.log(JSON.stringify(parsed, null, 2));
-              } catch (e) {
-                  console.error('Failed to parse extracted object', e);
-                  parsed = null;
-                  console.log('Raw answer:', answer);
-              }
-          } else {
-
-              console.log('Answer:', answer);
-
-          }
-
-        let replyText = '';
-        console.log('Body:', typeof body)
-        console.log('Body', body)
-        // prefer parsed structured object when available (extract from answer)
-        if (parsed) {
-            replyText = JSON.stringify(parsed);
-        } else if (typeof body === 'string') replyText = body;
-        else if (body.reply) replyText = String(body.reply);
-        else if (body.content) replyText = String(body.content);
-        else if (body.message) replyText = String(body.message);
-        else if (answer) replyText = String(answer);
-        else replyText = JSON.stringify(body);
-
-        const assistantMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: replyText,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-        return;
-      } catch (err) {
-        const assistantMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `Failed to call chat API: ${String(err)}`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-        return;
-      }
-    }
-
-    // If the prompt misses resource or period, ask follow-up
-    const detectedResource = detectResourceFromPrompt(prompt);
-    const detectedPeriod = normalizeMonthFromPrompt(prompt);
-    if (!detectedResource) {
-      const followUpText = `Which AWS service or resource do you mean? (e.g. s3, ec2, or a resource id)`;
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: followUpText,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setPendingFollowup({ kind: 'ask_resource', originalPrompt: prompt });
-      return;
-    }
-
-    if (detectedResource && !detectedPeriod) {
-      // Ask user for month+year
-      const followUpText = `Which month and year do you mean for ${detectedResource}? (e.g. May 2025)`;
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: followUpText,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setPendingFollowup({ kind: 'ask_period', resource: detectedResource, originalPrompt: prompt });
-      return;
-    }
-
       try {
           // Send request to /chat with the shape { prompt, previousPrompt, memories }
           // previousPrompt will be empty string if none
@@ -465,24 +325,10 @@ export function FinOpsView() {
               // convert single quotes to double quotes and parse
               const jsonText = match[0].replace(/'/g, '"');
               try {
-                  parsed = JSON.parse(jsonText);
-                  // coerce numeric-like strings into numbers
-                  const coerceNumbers = (v: any): any => {
-                    if (v === null || v === undefined) return v;
-                    if (typeof v === 'string' && /^-?\d+(?:\.\d+)?$/.test(v)) return Number(v);
-                    if (Array.isArray(v)) return v.map(coerceNumbers);
-                    if (typeof v === 'object') {
-                      const out: any = {};
-                      Object.entries(v).forEach(([k, val]) => { out[k] = coerceNumbers(val); });
-                      return out;
-                    }
-                    return v;
-                  };
-                  parsed = coerceNumbers(parsed);
+                  const parsed = JSON.parse(jsonText);
                   console.log(JSON.stringify(parsed, null, 2));
               } catch (e) {
                   console.error('Failed to parse extracted object', e);
-                  parsed = null;
                   console.log('Raw answer:', answer);
               }
           } else {
@@ -496,16 +342,17 @@ export function FinOpsView() {
           let replyText = '';
           console.log('Body:', typeof body)
           console.log('Body', body)
-          // prefer parsed structured object when available (extract from answer)
-          if (parsed) {
+          if (answer) {
+              replyText = answer;
+          
+
+      } else  if (parsed) {
             replyText = JSON.stringify(parsed);
-          } else if (typeof body === 'string') replyText = body;
-          else if (body.reply) replyText = String(body.reply);
-          else if (body.content) replyText = String(body.content);
-          else if (body.message) replyText = String(body.message);
-          else if (answer) replyText = String(answer);
-          else replyText = JSON.stringify(body);
-      
+      } else if (typeof body === 'string') replyText = body;
+      else if (body.reply) replyText = String(body.reply);
+      else if (body.content) replyText = String(body.content);
+      else if (body.message) replyText = String(body.message);
+      else replyText = JSON.stringify(body);
 
       // exact server no-data signal: { answer: "No data found." }
       const isExactNoData = typeof body === 'object' && body !== null && (body as any).answer === 'No data found.';
@@ -537,7 +384,7 @@ export function FinOpsView() {
         prevForMemory = '';
       }
 
-      if (noDataMatch && Boolean(period || resource)) {
+      if (noDataMatch && (period || resource)) {
         const memText = resource && period
           ? `${resource} spike in ${period} – no data found`
           : period
@@ -550,7 +397,7 @@ export function FinOpsView() {
       }
 
       // If assistant returned data, resolve any matching absence memories
-      if (foundMatch && Boolean(period || resource)) {
+      if (foundMatch && (period || resource)) {
         resolveMemories((m) =>
           !m.resolved && (
             (period ? m.period === period : false) ||
@@ -574,12 +421,6 @@ export function FinOpsView() {
       label: 'Total Cost',
       color: 'hsl(var(--chart-1))',
     },
-  };
-
-  // Config for the bar chart (Nov vs Dec)
-  const barChartConfig = {
-    nov: { label: 'Nov 2025', color: '#8884d8' },
-    dec: { label: 'Dec 2025', color: '#82ca9d' },
   };
 
   // Map /finops response into chart shape (yearly trend)
@@ -659,44 +500,27 @@ export function FinOpsView() {
             <CardTitle>Top Increases (Month-over-month)</CardTitle>
           </CardHeader>
           <CardContent>
-            {apiTopIncreases && apiTopIncreases.length ? (
-              <>
-                <ChartContainer config={barChartConfig} className="h-[300px]">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={apiTopIncreases} margin={{ top: 10, right: 20, left: 0, bottom: 80 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      {/* Show all service names on the horizontal axis. Rotate labels to avoid overlap. */}
-                      <XAxis
-                        dataKey="service_name"
-                        type="category"
-                        interval={0}
-                        tick={{ fontSize: 12 }}
-                        angle={-40}
-                        textAnchor="end"
-                        height={80}
-                      />
-                      {/* Costs on vertical axis, formatted with $ */}
-                      <YAxis tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                      <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Cost']} />
-                      <Legend />
-                      <Bar dataKey="nov_2025_cost" name="Nov 2025" fill="#8884d8" maxBarSize={40} />
-                      <Bar dataKey="dec_2025_cost" name="Dec 2025" fill="#82ca9d" maxBarSize={40} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-
-                <div className="mt-3 space-y-2 text-sm">
-                  {apiTopIncreases.map((r) => (
-                    <div key={r.service_name} className="flex justify-between items-center">
-                      <div className="truncate">{r.service_name}</div>
-                      <div className="font-medium">Δ ${Number(r.cost_difference).toLocaleString()}</div>
+            <div className="space-y-2">
+              {topResources.length > 0 ? (
+                topResources.map((r, idx) => (
+                  <div key={r.resourceid + idx} className="flex justify-between items-center">
+                    <div className="text-sm">{r.productname || r.resourceid}</div>
+                    <div className="font-medium text-right">${Number(r.total_cost).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                  </div>
+                ))
+              ) : computedTopDiffs.length ? (
+                computedTopDiffs.map((t, idx) => (
+                  <div key={idx} className="flex justify-between items-center">
+                    <div className="text-sm">
+                      {t.from} → {t.to}
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-muted-foreground">Not enough data</div>
-            )}
+                    <div className="font-medium text-right">+${t.diff.toLocaleString()}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground">Not enough data</div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

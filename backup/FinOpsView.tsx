@@ -340,51 +340,12 @@ export function FinOpsView() {
           return;
         }
 
-        let parsed: any = null;
         const body = await res.json();
-          const answer = body.answer ?? '';
-          const match = answer.match(/\\{[\\s\\S]*\\}/);
-          if (match) {
-              // convert single quotes to double quotes and parse
-              const jsonText = match[0].replace(/'/g, '"');
-              try {
-                  parsed = JSON.parse(jsonText);
-                  // coerce numeric-like strings into numbers
-                  const coerceNumbers = (v: any): any => {
-                      if (v === null || v === undefined) return v;
-                      if (typeof v === 'string' && /^-?\d+(?:\.\d+)?$/.test(v)) return Number(v);
-                      if (Array.isArray(v)) return v.map(coerceNumbers);
-                      if (typeof v === 'object') {
-                          const out: any = {};
-                          Object.entries(v).forEach(([k, val]) => { out[k] = coerceNumbers(val); });
-                          return out;
-                      }
-                      return v;
-                  };
-                  parsed = coerceNumbers(parsed);
-                  console.log(JSON.stringify(parsed, null, 2));
-              } catch (e) {
-                  console.error('Failed to parse extracted object', e);
-                  parsed = null;
-                  console.log('Raw answer:', answer);
-              }
-          } else {
-
-              console.log('Answer:', answer);
-
-          }
-
         let replyText = '';
-        console.log('Body:', typeof body)
-        console.log('Body', body)
-        // prefer parsed structured object when available (extract from answer)
-        if (parsed) {
-            replyText = JSON.stringify(parsed);
-        } else if (typeof body === 'string') replyText = body;
+        if (typeof body === 'string') replyText = body;
         else if (body.reply) replyText = String(body.reply);
         else if (body.content) replyText = String(body.content);
         else if (body.message) replyText = String(body.message);
-        else if (answer) replyText = String(answer);
         else replyText = JSON.stringify(body);
 
         const assistantMessage: ChatMessage = {
