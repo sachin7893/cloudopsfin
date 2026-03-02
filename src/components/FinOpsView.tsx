@@ -603,17 +603,17 @@ export function FinOpsView() {
   })();
 
   // If API returns top resources, use them; otherwise compute month-over-month top increases
-  const topResources = apiTopIncreases && apiTopIncreases.length ? apiTopIncreases.slice(0, 10) : [];
+  //const topResources = apiTopIncreases && apiTopIncreases.length ? apiTopIncreases.slice(0, 10) : [];
 
-  const computedTopDiffs = (() => {
-    const res: { from: string; to: string; diff: number }[] = [];
-    for (let i = 1; i < yearlyTrend.length; i++) {
-      const prev = yearlyTrend[i - 1];
-      const cur = yearlyTrend[i];
-      res.push({ from: prev.label, to: cur.label, diff: cur.total - prev.total });
-    }
-    return res.sort((a, b) => b.diff - a.diff).slice(0, 3);
-  })();
+  //const computedTopDiffs = (() => {
+  //  const res: { from: string; to: string; diff: number }[] = [];
+  //  for (let i = 1; i < yearlyTrend.length; i++) {
+  //    const prev = yearlyTrend[i - 1];
+  //    const cur = yearlyTrend[i];
+  //    res.push({ from: prev.label, to: cur.label, diff: cur.total - prev.total });
+  //  }
+  //  return res.sort((a, b) => b.diff - a.diff).slice(0, 3);
+  //})();
 
   return (
     <div className="flex h-full gap-6">
