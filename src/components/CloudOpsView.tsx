@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Cloud, MoreVertical, Play, Square, Calendar, Send, MessageSquare, X } from 'lucide-react';
+import { EC2ManagementDashboard } from './EC2ManagementDashboard';
 import {
   fetchEC2Instances,
   fetchEKSClusters,
@@ -39,6 +40,7 @@ export function CloudOpsView() {
   const [ec2Instances, setEc2Instances] = useState<EC2Instance[]>([]);
   const [eksClusters, setEksClusters] = useState<EKSCluster[]>([]);
   const [ecsServices, setEcsServices] = useState<ECSService[]>([]);
+  const [showEC2Dashboard, setShowEC2Dashboard] = useState(false);
   
   // Chat state
   const [messages, setMessages] = useState<CloudOpsChatMessage[]>([
@@ -256,8 +258,9 @@ export function CloudOpsView() {
         </div>
 
         <Tabs defaultValue="ec2" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-4 max-w-md">
             <TabsTrigger value="ec2">EC2</TabsTrigger>
+            <TabsTrigger value="ec2-manage">EC2 Manage</TabsTrigger>
             <TabsTrigger value="ecs">ECS</TabsTrigger>
             <TabsTrigger value="eks">EKS</TabsTrigger>
           </TabsList>
@@ -340,6 +343,10 @@ export function CloudOpsView() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="ec2-manage" className="mt-6">
+            <EC2ManagementDashboard onClose={() => setShowEC2Dashboard(false)} />
           </TabsContent>
 
           <TabsContent value="ecs" className="mt-6">

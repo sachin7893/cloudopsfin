@@ -88,3 +88,43 @@ export interface ConversationContext {
   createdAt: string;
   expiresAt: string;
 }
+
+// EC2 Management Dashboard Types
+
+export interface EC2InstanceDetail {
+  instanceId: string;
+  instanceType: string;
+  state: 'running' | 'stopped' | 'stopping' | 'pending' | 'terminated';
+  launchTime: string;
+  tags: Record<string, string>;
+  applicationName?: string;
+  scheduleId?: string;
+  scheduleName?: string;
+  accountId: string;
+  region: string;
+}
+
+export interface Schedule {
+  scheduleId: string;
+  applicationName: string;
+  scheduleName: string;
+  startTime: string; // HH:MM format
+  stopTime: string;  // HH:MM format
+  daysOfWeek: string[]; // ['Monday', 'Tuesday', ...]
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleAssociation {
+  instanceId: string;
+  scheduleId: string;
+  applicationName: string;
+  createdAt: string;
+}
+
+export interface AWSAccount {
+  accountId: string;
+  accountName: string;
+  region: string;
+}
