@@ -1,0 +1,27 @@
+{
+  "name": "cloudops-chat-backend",
+  "version": "1.0.0",
+  "description": "AWS Lambda backend for CloudOps GenAI troubleshooting chat",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npm run build && zip -r function.zip dist/ node_modules/",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.600.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.600.0",
+    "@aws-sdk/client-ec2": "^3.600.0",
+    "@aws-sdk/client-ecs": "^3.600.0",
+    "@aws-sdk/client-eks": "^3.600.0",
+    "@aws-sdk/client-rds": "^3.600.0",
+    "@aws-sdk/client-lambda": "^3.600.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}
