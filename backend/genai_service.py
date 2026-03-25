@@ -45,6 +45,7 @@ class GenAIService:
             )
             
             response_body = json.loads(response['body'].read())
+
             analysis_text = response_body['content'][0]['text']
             
             return self._parse_response(analysis_text)

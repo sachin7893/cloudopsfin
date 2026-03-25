@@ -22,10 +22,9 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Cloud, MoreVertical, Play, Square, Calendar, Send, MessageSquare, X } from 'lucide-react';
 import { EC2ManagementDashboard } from './EC2ManagementDashboard';
+import { ECSManagementDashboard } from './ECSManagementDashboard';
 import {
-  fetchEC2Instances,
   fetchEKSClusters,
-  fetchECSServices,
 } from '@/lib/mockData';
 import { 
   EC2Instance, 
@@ -37,10 +36,7 @@ import {
 import { toast } from 'sonner';
 
 export function CloudOpsView() {
-  const [ec2Instances, setEc2Instances] = useState<EC2Instance[]>([]);
   const [eksClusters, setEksClusters] = useState<EKSCluster[]>([]);
-  const [ecsServices, setEcsServices] = useState<ECSService[]>([]);
-  const [showEC2Dashboard, setShowEC2Dashboard] = useState(false);
   
   // Chat state
   const [messages, setMessages] = useState<CloudOpsChatMessage[]>([
@@ -61,9 +57,7 @@ export function CloudOpsView() {
   const CONTEXT_TTL_HOURS = 24;
 
   useEffect(() => {
-    setEc2Instances(fetchEC2Instances());
     setEksClusters(fetchEKSClusters());
-    setEcsServices(fetchECSServices());
     loadConversationContext();
   }, []);
 
@@ -202,33 +196,6 @@ export function CloudOpsView() {
     }
   };
 
-  const handleEC2Action = (
-    instanceId: string,
-    action: 'start' | 'stop' | 'schedule'
-  ) => {
-    if (action === 'start') {
-      setEc2Instances((prev) =>
-        prev.map((inst) =>
-          inst.instanceId === instanceId
-            ? { ...inst, status: 'Running' }
-            : inst
-        )
-      );
-      toast.success(`Starting instance ${instanceId}`);
-    } else if (action === 'stop') {
-      setEc2Instances((prev) =>
-        prev.map((inst) =>
-          inst.instanceId === instanceId
-            ? { ...inst, status: 'Stopped' }
-            : inst
-        )
-      );
-      toast.success(`Stopping instance ${instanceId}`);
-    } else if (action === 'schedule') {
-      toast.info(`Schedule action for ${instanceId} - Not implemented in demo`);
-    }
-  };
-
   const handleSuspendCluster = (clusterId: string, suspend: boolean) => {
     setEksClusters((prev) =>
       prev.map((cluster) =>
@@ -257,136 +224,19 @@ export function CloudOpsView() {
           <h1 className="text-3xl font-bold">CloudOps Dashboard</h1>
         </div>
 
-        <Tabs defaultValue="ec2" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 max-w-md">
-            <TabsTrigger value="ec2">EC2</TabsTrigger>
+        <Tabs defaultValue="ec2-manage" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
             <TabsTrigger value="ec2-manage">EC2 Manage</TabsTrigger>
             <TabsTrigger value="ecs">ECS</TabsTrigger>
             <TabsTrigger value="eks">EKS</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="ec2" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>EC2 Instances</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Instance ID</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Region</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ec2Instances.map((instance) => (
-                      <TableRow key={instance.id}>
-                        <TableCell className="font-mono text-sm">
-                          {instance.instanceId}
-                        </TableCell>
-                        <TableCell>{instance.type}</TableCell>
-                        <TableCell>{instance.region}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              instance.status === 'Running'
-                                ? 'default'
-                                : 'secondary'
-                            }
-                          >
-                            {instance.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleEC2Action(instance.instanceId, 'start')
-                                }
-                                disabled={instance.status === 'Running'}
-                              >
-                                <Play className="mr-2 h-4 w-4" />
-                                Start
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleEC2Action(instance.instanceId, 'stop')
-                                }
-                                disabled={instance.status === 'Stopped'}
-                              >
-                                <Square className="mr-2 h-4 w-4" />
-                                Stop
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleEC2Action(instance.instanceId, 'schedule')
-                                }
-                              >
-                                <Calendar className="mr-2 h-4 w-4" />
-                                Schedule
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="ec2-manage" className="mt-6">
-            <EC2ManagementDashboard onClose={() => setShowEC2Dashboard(false)} />
+            <EC2ManagementDashboard />
           </TabsContent>
 
           <TabsContent value="ecs" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>ECS Services</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Service Name</TableHead>
-                      <TableHead>Cluster</TableHead>
-                      <TableHead>Task Count</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ecsServices.map((service) => (
-                      <TableRow key={service.id}>
-                        <TableCell className="font-medium">
-                          {service.name}
-                        </TableCell>
-                        <TableCell>{service.cluster}</TableCell>
-                        <TableCell>{service.taskCount}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              service.status === 'Active' ? 'default' : 'secondary'
-                            }
-                          >
-                            {service.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <ECSManagementDashboard />
           </TabsContent>
 
           <TabsContent value="eks" className="mt-6">

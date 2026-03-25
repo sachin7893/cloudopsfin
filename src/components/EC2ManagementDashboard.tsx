@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,17 +7,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import { Play, Square, Settings, Clock, Loader2 } from 'lucide-react';
 import type { EC2InstanceDetail, Schedule, AWSAccount } from '@/types/index';
 
 const API_BASE = 'https://0azsdk6qbb.execute-api.ap-south-1.amazonaws.com/prod';
 
 interface EC2ManagementDashboardProps {
-  onClose?: () => void;
+  // No props needed
 }
 
-export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps) {
+export function EC2ManagementDashboard({}: EC2ManagementDashboardProps) {
   const { toast } = useToast();
   
   // State management
@@ -35,8 +34,18 @@ export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps)
   const [selectedInstance, setSelectedInstance] = useState<EC2InstanceDetail | null>(null);
   const [newInstanceType, setNewInstanceType] = useState('');
   const [scheduleDialog, setScheduleDialog] = useState(false);
+  const [createScheduleDialog, setCreateScheduleDialog] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'start' | 'stop'; instanceId: string } | null>(null);
+  
+  // Create schedule form state
+  const [newSchedule, setNewSchedule] = useState({
+    scheduleName: '',
+    startTime: '08:00',
+    stopTime: '18:00',
+    daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    timezone: 'UTC'
+  });
 
   // Fetch accounts on mount
   useEffect(() => {
@@ -226,6 +235,79 @@ export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps)
     }
   };
 
+  const handleCreateSchedule = async () => {
+    if (!selectedApplication || !newSchedule.scheduleName) {
+      toast({ title: 'Error', description: 'Please fill in all required fields', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setActionLoading('creating-schedule');
+      console.log('Creating schedule with data:', {
+        applicationName: selectedApplication,
+        scheduleName: newSchedule.scheduleName,
+        startTime: newSchedule.startTime,
+        stopTime: newSchedule.stopTime,
+        daysOfWeek: newSchedule.daysOfWeek,
+        timezone: newSchedule.timezone
+      });
+
+      const response = await fetch(`${API_BASE}/ec2/create-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationName: selectedApplication,
+          scheduleName: newSchedule.scheduleName,
+          startTime: newSchedule.startTime,
+          stopTime: newSchedule.stopTime,
+          daysOfWeek: newSchedule.daysOfWeek,
+          timezone: newSchedule.timezone
+        })
+      });
+
+      console.log('Response status:', response.status);
+      const responseData = await response.json();
+      console.log('Response data:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Failed to create schedule');
+      }
+      
+      toast({
+        title: 'Success',
+        description: 'Schedule created successfully'
+      });
+      
+      setCreateScheduleDialog(false);
+      setNewSchedule({
+        scheduleName: '',
+        startTime: '08:00',
+        stopTime: '18:00',
+        daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        timezone: 'UTC'
+      });
+      fetchSchedules();
+    } catch (error) {
+      console.error('Error creating schedule:', error);
+      toast({ 
+        title: 'Error', 
+        description: error instanceof Error ? error.message : 'Failed to create schedule', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const toggleDayOfWeek = (day: string) => {
+    setNewSchedule(prev => ({
+      ...prev,
+      daysOfWeek: prev.daysOfWeek.includes(day)
+        ? prev.daysOfWeek.filter(d => d !== day)
+        : [...prev.daysOfWeek, day]
+    }));
+  };
+
   const getStateColor = (state: string) => {
     switch (state) {
       case 'running':
@@ -244,7 +326,6 @@ export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps)
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">EC2 Management Dashboard</h2>
-        {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
       </div>
 
       {/* Filters */}
@@ -285,27 +366,122 @@ export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps)
       </Card>
 
       {/* Schedules Info */}
-      {selectedApplication && schedules.length > 0 && (
+      {selectedApplication && (
         <Card className="p-4 bg-blue-50">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            Available Schedules
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {schedules.map(schedule => (
-              <div key={schedule.scheduleId} className="text-sm p-2 bg-white rounded border">
-                <p className="font-medium">{schedule.scheduleName}</p>
-                <p className="text-gray-600">{schedule.startTime} - {schedule.stopTime}</p>
-                <p className="text-gray-500 text-xs">{schedule.daysOfWeek.join(', ')}</p>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Available Schedules
+            </h3>
+            <Dialog open={createScheduleDialog} onOpenChange={setCreateScheduleDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  + Create Schedule
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md bg-white">
+                <DialogHeader>
+                  <DialogTitle className="text-black">Create New Schedule</DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Create a schedule for {selectedApplication}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-black">Schedule Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Business Hours"
+                      value={newSchedule.scheduleName}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, scheduleName: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-md text-sm mt-1 bg-white text-black placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-sm font-medium text-black">Start Time</label>
+                      <input
+                        type="time"
+                        value={newSchedule.startTime}
+                        onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-md text-sm mt-1 bg-white text-black"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-black">Stop Time</label>
+                      <input
+                        type="time"
+                        value={newSchedule.stopTime}
+                        onChange={(e) => setNewSchedule({ ...newSchedule, stopTime: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-md text-sm mt-1 bg-white text-black"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block text-black">Days of Week</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                        <label key={day} className="flex items-center gap-2 text-sm text-black">
+                          <input
+                            type="checkbox"
+                            checked={newSchedule.daysOfWeek.includes(day)}
+                            onChange={() => toggleDayOfWeek(day)}
+                            className="rounded"
+                          />
+                          {day.slice(0, 3)}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleCreateSchedule}
+                    disabled={actionLoading === 'creating-schedule'}
+                    className="w-full"
+                  >
+                    {actionLoading === 'creating-schedule' ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Create Schedule
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
+          {schedules.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {schedules.map(schedule => (
+                <div key={schedule.scheduleId} className="text-sm p-2 bg-white rounded border">
+                  <p className="font-medium">{schedule.scheduleName}</p>
+                  <p className="text-gray-600">{schedule.startTime} - {schedule.stopTime}</p>
+                  <p className="text-gray-500 text-xs">{schedule.daysOfWeek.join(', ')}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">No schedules created yet. Create one to get started!</p>
+          )}
         </Card>
       )}
 
       {/* Instances Table */}
       {selectedApplication && (
         <Card>
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="font-semibold">EC2 Instances</h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={fetchInstances}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <span>🔄</span>
+              )}
+              Refresh
+            </Button>
+          </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -345,34 +521,32 @@ export function EC2ManagementDashboard({ onClose }: EC2ManagementDashboardProps)
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {instance.state === 'stopped' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStartInstance(instance.instanceId)}
-                              disabled={actionLoading === instance.instanceId}
-                            >
-                              {actionLoading === instance.instanceId ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Play className="w-4 h-4" />
-                              )}
-                            </Button>
-                          )}
-                          {instance.state === 'running' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStopInstance(instance.instanceId)}
-                              disabled={actionLoading === instance.instanceId}
-                            >
-                              {actionLoading === instance.instanceId ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Square className="w-4 h-4" />
-                              )}
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStartInstance(instance.instanceId)}
+                            disabled={actionLoading === instance.instanceId || instance.state === 'running'}
+                            title={instance.state === 'running' ? 'Instance is already running' : 'Start instance'}
+                          >
+                            {actionLoading === instance.instanceId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStopInstance(instance.instanceId)}
+                            disabled={actionLoading === instance.instanceId || instance.state === 'stopped'}
+                            title={instance.state === 'stopped' ? 'Instance is already stopped' : 'Stop instance'}
+                          >
+                            {actionLoading === instance.instanceId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </Button>
 
                           <Dialog open={modifyTypeDialog && selectedInstance?.instanceId === instance.instanceId} onOpenChange={setModifyTypeDialog}>
                             <DialogTrigger asChild>
